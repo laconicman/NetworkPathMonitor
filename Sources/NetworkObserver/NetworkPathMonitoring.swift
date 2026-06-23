@@ -13,6 +13,8 @@ public protocol NetworkPathMonitoring: Sendable {
     /// An async sequence of network paths. The first element is the current path;
     /// each subsequent element is a change. Buffering keeps only the newest value
     /// (connectivity is state, not a log), so a slow consumer never sees a backlog.
+    /// Each call returns an independent, single-consumer stream — give each
+    /// consumer (and each `for await`) its own rather than sharing one.
     func paths() -> AsyncStream<NetworkPath>
 }
 
@@ -27,11 +29,11 @@ public extension NetworkPathMonitoring {
 
     /// Suspends until a usable (`.satisfied`) path is available, then returns.
     ///
-    /// This is the primitive a "pause and resume when the network returns" policy
-    /// wants: in `OnPersistentlyRejected`, `await monitor.waitUntilSatisfied()`
-    /// before letting your retry policy re-drive the request. (Returns immediately
-    /// if already satisfied; returns when the stream ends if it never satisfies,
-    /// which a real monitor won't do but a finite stub will.)
+    /// Use it to *react* to connectivity — drive a "waiting for network" UI, or
+    /// pace a retry loop between attempts — rather than to gate a request; make the
+    /// request itself wait via `URLSession`'s `waitsForConnectivity`. (Returns
+    /// immediately if already satisfied; returns when the stream ends if it never
+    /// satisfies, which a real monitor won't do but a finite stub will.)
     func waitUntilSatisfied() async {
         for await path in paths() where path.isSatisfied { return }
     }

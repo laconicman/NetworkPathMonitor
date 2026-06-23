@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "swift-network-observer",
+    name: "NetworkPathMonitor",
     platforms: [
-        // Same iOS 15-generation baseline the `apple-network` skill targets.
+        // iOS 15-generation baseline across all Apple platforms.
         // Note the one gotcha that shapes the implementation: NWPathMonitor's
         // native AsyncSequence (`for await path in NWPathMonitor()`) is iOS 17+,
         // so iOS 15–16 are served by a hand-rolled bridge (see NetworkPathMonitor).

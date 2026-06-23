@@ -10,9 +10,8 @@ import Network
 /// - **iOS 17 / macOS 14 / tvOS 17 / watchOS 10+**: delegates to `NWPathMonitor`'s
 ///   own `AsyncSequence` conformance (verified gate: the `NWPathMonitor.Iterator`
 ///   subpage, https://developer.apple.com/documentation/network/nwpathmonitor/iterator).
-/// - **iOS 15–16**: that conformance does not exist, so this hand-rolls it by
-///   bridging `pathUpdateHandler` into an `AsyncStream` — the canonical pattern
-///   from the `apple-network` skill.
+/// - **iOS 15–16**: that conformance does not exist, so this hand-rolls the same
+///   shape by bridging `pathUpdateHandler` into an `AsyncStream`.
 ///
 /// A fresh `NWPathMonitor` is created per iteration and cancelled on termination,
 /// avoiding two framework footguns: a cancelled monitor can't be restarted, and a
@@ -35,7 +34,7 @@ public struct NetworkPathMonitor: NetworkPathMonitoring, Sendable {
     }
 
     /// The raw `NWPath` stream, for callers needing fields the mirror omits
-    /// (`gateways`, `supportsDNS`, `unsatisfiedReason`, …).
+    /// (`gateways`, `supportsDNS`, `unsatisfiedReason`, `isUltraConstrained`, …).
     public func nwPaths() -> AsyncStream<NWPath> {
         makeStream { $0 }
     }

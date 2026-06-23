@@ -17,7 +17,7 @@ decision-relevant subset of `NWPath` — because `NWPath` has no public initiali
 cannot be constructed in a test. The mirror reuses Network's own `NWPath.Status` and
 `NWInterface.InterfaceType`, so the vocabulary stays identical to the framework; the raw
 `NWPath` stream is still reachable via ``NetworkPathMonitor/nwPaths()`` when you need
-fields the mirror omits (`gateways`, `supportsDNS`, `unsatisfiedReason`, …).
+fields the mirror omits (`gateways`, `supportsDNS`, `unsatisfiedReason`, `isUltraConstrained`, …).
 
 The default convenience primitives — ``NetworkPathMonitoring/currentPath()`` and
 ``NetworkPathMonitoring/waitUntilSatisfied()`` — are the two a connectivity-aware policy

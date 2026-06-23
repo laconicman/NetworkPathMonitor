@@ -1,9 +1,9 @@
-# swift-network-observer
+# NetworkPathMonitor
 
-[![Swift Compatibility](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Flaconicman%2Fswift-network-observer%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/laconicman/swift-network-observer)
-[![Platform Compatibility](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Flaconicman%2Fswift-network-observer%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/laconicman/swift-network-observer)
+[![Swift Compatibility](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Flaconicman%2FNetworkPathMonitor%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/laconicman/NetworkPathMonitor)
+[![Platform Compatibility](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Flaconicman%2FNetworkPathMonitor%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/laconicman/NetworkPathMonitor)
 
-A tiny, dependency-free network-state observer for Apple platforms, built on `Network` (`NWPathMonitor`) with Swift Concurrency. It exists to feed connectivity-aware decisions — e.g. letting an auth middleware's "persistently rejected" handler pause until the network returns, surface the *right* error, or hand off to a retry policy.
+A tiny, dependency-free network-path observer for Apple platforms, built on `Network` (`NWPathMonitor`) with Swift Concurrency. It exists to feed connectivity-aware decisions — e.g. surfacing the *right* error when a request fails offline, driving a "waiting for network" UI, or pacing a retry policy.
 
 - **Baseline:** iOS 15+, macOS 12+, tvOS 15+, watchOS 8+, visionOS 1+ · Swift 6 language mode.
 - **API close to `Network`:** re-exports Network; reuses `NWPath.Status` and `NWInterface.InterfaceType`; the monitor is an `AsyncSequence` you iterate like `NWPathMonitor` itself.
@@ -17,7 +17,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/laconicman/swift-network-observer.git", from: "1.0.0")
+    .package(url: "https://github.com/laconicman/NetworkPathMonitor.git", from: "1.0.0")
 ]
 ```
 
@@ -28,14 +28,14 @@ targets: [
     .target(
         name: "YourTarget",
         dependencies: [
-            .product(name: "NetworkObserver", package: "swift-network-observer")
+            .product(name: "NetworkObserver", package: "NetworkPathMonitor")
         ]
     ),
     .testTarget(
         name: "YourTargetTests",
         dependencies: [
-            .product(name: "NetworkObserver", package: "swift-network-observer"),
-            .product(name: "NetworkObserverTestSupport", package: "swift-network-observer")
+            .product(name: "NetworkObserver", package: "NetworkPathMonitor"),
+            .product(name: "NetworkObserverTestSupport", package: "NetworkPathMonitor")
         ]
     )
 ]
@@ -61,7 +61,7 @@ let online = await monitor.currentPath()?.isSatisfied ?? false
 await monitor.waitUntilSatisfied()   // suspend until connectivity returns
 ```
 
-Need fields the mirror omits (`gateways`, `supportsDNS`, `unsatisfiedReason`)? Use `monitor.nwPaths()` for the raw `NWPath` stream.
+Need fields the mirror omits (`gateways`, `supportsDNS`, `unsatisfiedReason`, `isUltraConstrained`)? Use `monitor.nwPaths()` for the raw `NWPath` stream.
 
 ## Design
 
@@ -79,24 +79,21 @@ await sut.handlePersistentRejection(monitor: monitor)
 
 ## Integrating with `RefreshTokenAuthMiddleware`
 
-[`RefreshTokenAuthMiddleware`](https://github.com/laconicman/RefreshTokenAuthMiddleware) runs on a `URLSession`-backed transport, so it opens no raw connections — it just needs path state. As of its 2.0.0 it has **no** connectivity hook, so wire one in at an adopter seam: gate the network-bound operations of your `SignInAndRefresh` conformance on a usable path (below), or gate its `credentialsProvider` closure. Surface a *network* error when offline so the middleware doesn't misread it as an auth failure — or pause until the network returns:
+[`RefreshTokenAuthMiddleware`](https://github.com/laconicman/RefreshTokenAuthMiddleware) runs on a `URLSession`-backed transport. Per Apple's guidance, **don't gate the request on a connectivity pre-check** — reading "am I online?" and *then* calling is a race, and it duplicates what the OS does better. Make the *request* wait by configuring the transport's `URLSession`:
 
 ```swift
-import NetworkObserver
-import RefreshTokenAuthMiddleware
-
-extension Client: SignInAndRefresh {
-    // `monitor` is a NetworkPathMonitoring you injected at construction.
-    func refreshTokenIfNeeded(with refreshToken: RefreshToken?)
-        async throws -> (accessToken: Token, refreshToken: RefreshToken?) {
-        await monitor.waitUntilSatisfied()        // pause while offline; resume when back
-        guard let refreshToken else { throw AuthError.missingRefreshToken }
-        // … your generated auth-refresh operation …
-    }
-}
+let config = URLSessionConfiguration.default
+config.waitsForConnectivity = true             // wait for connectivity instead of failing fast
+config.allowsConstrainedNetworkAccess = false  // e.g. don't refresh over Low Data Mode
+// Build your OpenAPI URLSessionTransport from URLSession(configuration: config).
 ```
 
-The `credentialsProvider` path (consulted under `onRefreshFailure: .requestCredentials` / `onPersistentlyRejected: .signInOnSecond401`) and pairing with a retry runner such as [swift-concurrency-retry](https://github.com/laconicman/swift-concurrency-retry) are covered in [`Design` §7](Sources/NetworkObserver/NetworkObserver.docc/Design.md). This package only answers "what is the network doing right now / wake me when it's back."
+Use `NetworkObserver` to *react to* connectivity (the middleware, as of 2.0.0, has no connectivity hook) — reaction is what path monitoring is for:
+
+- **Surface the right error.** Have the `credentialsProvider` closure throw a *network* error when `await monitor.currentPath()?.isSatisfied != true`, so an outage surfaces as `AuthError.credentialsUnavailable` rather than a misattributed auth failure.
+- **Drive UX / pace retries.** Show a "waiting for network" state, or hold a retry runner such as [swift-concurrency-retry](https://github.com/laconicman/swift-concurrency-retry) until `await monitor.waitUntilSatisfied()` returns.
+
+See [`Design` §7](Sources/NetworkObserver/NetworkObserver.docc/Design.md) for the full wiring. This package only answers "what is the network doing right now / wake me when it's back."
 
 ## Roadmap
 

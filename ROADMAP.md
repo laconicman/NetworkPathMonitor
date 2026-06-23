@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestone summary for `swift-network-observer`. The load-bearing design record lives at
+Milestone summary for `NetworkPathMonitor`. The load-bearing design record lives at
 [`Sources/NetworkObserver/NetworkObserver.docc/Design.md`](Sources/NetworkObserver/NetworkObserver.docc/Design.md)
 (a DocC article that also renders on Swift Package Index). This file is a summary; the
 design article is authoritative when the two disagree.
@@ -46,6 +46,16 @@ design article is authoritative when the two disagree.
 
 ## Skill alignment notes
 
+- **apple-network.** Implements the skill's prescribed Part 1 pattern almost verbatim —
+  the `NetworkPath` `Sendable` mirror reusing Network's own enums, the
+  `NetworkPathMonitoring` protocol vending the mirror, `.bufferingNewest(1)`, a fresh
+  monitor per stream cancelled on termination, and `availableInterfaces.first?.type` (no
+  `CaseIterable` retrofit). Every "Pitfalls in depth" item is handled (strong reference,
+  not-restartable, `.satisfied` ≠ reachable, `requiredInterfaceType` inversion,
+  single-consumer). Deliberate divergences: it adds the protocol/DI seam (which the skill
+  endorses) and uses `NWPathMonitor`'s native `AsyncSequence` on iOS 17+ rather than the
+  skill's bridge-everywhere minimalism — modern API when available, hand-rolled bridge as
+  the iOS 15–16 fallback.
 - **swift-package-manager.** Per-target `Sources/<target>` + `Tests/<target>` layout (a
   three-target package can't use the single-target flat `Sources/` form); a separate
   test-support product so the stub never ships in production; the DocC catalog inside the

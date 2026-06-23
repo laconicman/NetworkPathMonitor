@@ -12,7 +12,7 @@
 /// connectivity. The fields deliberately reuse Network's own
 /// `NWPath.Status` and `NWInterface.InterfaceType`, so the vocabulary stays
 /// identical to the framework. When you need fields beyond this subset
-/// (`gateways`, `supportsDNS`, `unsatisfiedReason`, …), reach for the raw
+/// (`gateways`, `supportsDNS`, `unsatisfiedReason`, `isUltraConstrained`, …), reach for the raw
 /// `NWPath` stream on `NetworkPathMonitor.nwPaths()`.
 public struct NetworkPath: Sendable, Equatable {
 
@@ -57,8 +57,8 @@ public extension NetworkPath {
     /// A usable path exists. NOTE: `.satisfied` does NOT prove the internet is
     /// reachable — a captive portal can satisfy a path. For true reachability,
     /// make a real request and handle failure (Ross Butler, "Detecting Internet
-    /// Access on iOS 12+"; see the apple-network skill's libraries reference for
-    /// rwbutler/Connectivity if you need captive-portal detection systematically).
+    /// Access on iOS 12+"); for systematic captive-portal detection, a dedicated
+    /// library such as rwbutler/Connectivity is the right tool.
     var isSatisfied: Bool { status == .satisfied }
 
     /// The primary in-use interface type, if any (mirrors taking the first of

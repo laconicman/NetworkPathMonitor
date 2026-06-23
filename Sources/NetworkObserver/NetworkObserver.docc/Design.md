@@ -13,7 +13,7 @@ keeps a consumer — e.g. a refresh-token auth middleware — testable.
 
 > Note: This is the as-designed record. ``NetworkPathMonitor``, ``NetworkPathMonitoring``,
 > and ``NetworkPath`` conform to it; deviations require a doc update. The repository's
-> [`ROADMAP.md`](https://github.com/laconicman/swift-network-observer/blob/main/ROADMAP.md)
+> [`ROADMAP.md`](https://github.com/laconicman/NetworkPathMonitor/blob/main/ROADMAP.md)
 > carries the milestone summary; this article is authoritative when the two disagree.
 
 `NetworkObserver` is deliberately small. It observes **paths** — the connectivity
@@ -67,7 +67,7 @@ module re-exports `Network` (`@_exported import Network`), so a caller that
 `import NetworkObserver` gets `NWPath.Status` and friends directly.
 
 When you need a field the mirror omits (`gateways`, `supportsDNS`, `unsatisfiedReason`,
-…), the escape hatch is the raw stream ``NetworkPathMonitor/nwPaths()`` — the mirror is a
+`isUltraConstrained`, …), the escape hatch is the raw stream ``NetworkPathMonitor/nwPaths()`` — the mirror is a
 convenience for the common case, not a wall.
 
 > Tip: ``NetworkPath/satisfied(isExpensive:isConstrained:interfaces:)`` and
@@ -108,7 +108,7 @@ implementations on top of it:
 - ``NetworkPathMonitoring/currentPath()`` — the most recent path (awaits the first if
   none has arrived).
 - ``NetworkPathMonitoring/waitUntilSatisfied()`` — suspend until a usable path exists.
-  This is the primitive a "pause, then resume when the network returns" policy wants.
+  This is the primitive a connectivity-reactive policy uses — drive UX or pace retries (§7).
 
 The stub ships in a **separate product**, `NetworkObserverTestSupport`
 (`StubNetworkPathMonitor`), so production code never links it while a consumer's test
@@ -131,34 +131,29 @@ The motivating consumer is
 Its transport is `URLSession`-backed, so it opens no raw connections — **path monitoring
 is the piece it needs**, not the connection layer.
 
-> Important: As of 2.0.0 the middleware has **no** connectivity hook and no `Network`
-> dependency. Connectivity awareness is entirely the adopter's responsibility. The clean
-> way to add it is to gate the middleware's network-bound seams on a usable path — surface
-> a *network* error when offline so the middleware doesn't misread it as an auth failure,
-> or pause until the network returns and let the request be re-driven.
-
-The middleware exposes two adopter seams you can gate. First, your `SignInAndRefresh`
-conformance — pause the network-bound operations until the path is usable:
+> Important: Don't gate the request on a connectivity pre-check. Reading "am I online?"
+> and *then* firing the call is a race (connectivity can change in the gap) and duplicates
+> what the OS already does better. Make the **request** wait by configuring the transport's
+> `URLSession` (`waitsForConnectivity` and the `allows*NetworkAccess` family); use
+> `NetworkObserver` to **react to** connectivity — which is what path monitoring is for.
+> (Apple, [WWDC 2018 session 715](https://developer.apple.com/videos/play/wwdc2018/715/).)
 
 ```swift
-import NetworkObserver
-import RefreshTokenAuthMiddleware
-
-extension Client: SignInAndRefresh {
-    // Hold the NetworkPathMonitoring you injected at construction.
-    func refreshTokenIfNeeded(with refreshToken: RefreshToken?)
-        async throws -> (accessToken: Token, refreshToken: RefreshToken?) {
-        await monitor.waitUntilSatisfied()          // pause while offline; resume when back
-        guard let refreshToken else { throw AuthError.missingRefreshToken }
-        // … your generated auth-refresh operation …
-    }
-}
+// The request waits without a race — no pre-check.
+let config = URLSessionConfiguration.default
+config.waitsForConnectivity = true
+config.allowsConstrainedNetworkAccess = false   // e.g. don't refresh over Low Data Mode
+// Build the OpenAPI transport's URLSession from `config`.
 ```
 
-Second, the `credentialsProvider` closure (`@Sendable () async throws -> Credentials?`),
-which the actor consults under `onRefreshFailure: .requestCredentials` and
-`onPersistentlyRejected: .signInOnSecond401`. Throwing from it when offline surfaces as
-`AuthError.credentialsUnavailable(reason:)` rather than a misattributed auth error:
+Where `NetworkObserver` earns its place — the middleware (as of 2.0.0) has **no**
+connectivity hook — is *reaction*:
+
+- **Surface the right error.** The `credentialsProvider` closure
+  (`@Sendable () async throws -> Credentials?`) is consulted under
+  `onRefreshFailure: .requestCredentials` and `onPersistentlyRejected: .signInOnSecond401`.
+  Throwing a *network* error from it when the path is unsatisfied makes the failure surface
+  as `AuthError.credentialsUnavailable(reason:)` instead of a misattributed auth error:
 
 ```swift
 let credentialsProvider: CredentialsProvider<Credentials> = {
@@ -169,9 +164,14 @@ let credentialsProvider: CredentialsProvider<Credentials> = {
 }
 ```
 
-Because the consumer depends on ``NetworkPathMonitoring``, both wirings are testable end
-to end: inject `StubNetworkPathMonitor([.unsatisfied, .satisfied()])` and assert the
-consumer waits, then proceeds.
+- **Drive UX and pace retries.** Observe ``NetworkPathMonitoring/paths()`` to show a
+  "waiting for network" state, or hold a retry runner such as
+  [swift-concurrency-retry](https://github.com/laconicman/swift-concurrency-retry) until
+  ``NetworkPathMonitoring/waitUntilSatisfied()`` returns before the next attempt.
+
+Because the consumer depends on ``NetworkPathMonitoring``, both are testable end to end:
+inject `StubNetworkPathMonitor([.unsatisfied, .satisfied()])` and assert the consumer
+reports offline, then proceeds.
 
 ## 8. Roadmap: iOS 26 structured-concurrency Network APIs
 
@@ -186,3 +186,9 @@ monitoring (this package) is the piece needed now, and `NWPathMonitor`'s native
 `AsyncSequence` already covers iOS 17+. Adopt the `NetworkConnection` family only if a
 consumer later moves to a raw-connection transport — and because consumers depend on
 ``NetworkPathMonitoring``, that would be an additive change, not a rewrite.
+
+The ``NetworkPath`` mirror survives that recraft regardless: even
+[`NetworkConnection.currentPath`](https://developer.apple.com/documentation/network/networkconnection/currentpath)
+returns `NWPath?` — still with no public initializer — so the value mirror remains the
+testability seam, and the ``NetworkPathMonitoring`` protocol insulates consumers from any
+future path-representation churn.
