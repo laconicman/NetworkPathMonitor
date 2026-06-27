@@ -1,15 +1,15 @@
-import NetworkObserver
+import NetworkPathMonitor
 
-/// A scriptable `NetworkPathMonitoring` for unit tests and previews — inject this
-/// in place of `NetworkPathMonitor` to drive a consumer (e.g. the middleware's
+/// A scriptable `PathMonitoring` for unit tests and previews — inject this
+/// in place of `PathMonitor` to drive a consumer (e.g. the middleware's
 /// `OnPersistentlyRejected`) through a fixed sequence of network states without a
 /// real network.
 ///
 /// ```swift
-/// let monitor = StubNetworkPathMonitor([.unsatisfied, .satisfied()])
+/// let monitor = StubPathMonitor([.unsatisfied, .satisfied()])
 /// await sut.handlePersistentRejection(monitor: monitor)   // observes both states
 /// ```
-public struct StubNetworkPathMonitor: NetworkPathMonitoring {
+public struct StubPathMonitor: PathMonitoring {
 
     private let scripted: [NetworkPath]
 

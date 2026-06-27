@@ -1,10 +1,10 @@
 import Foundation
 import Network
 
-/// The default `Network`-backed implementation of `NetworkPathMonitoring`.
+/// The default `Network`-backed implementation of `PathMonitoring`.
 ///
 /// It is itself an `AsyncSequence` of `NetworkPath`, so it mirrors the modern
-/// `NWPathMonitor` shape — `for await path in NetworkPathMonitor() { … }` — on the
+/// `NWPathMonitor` shape — `for await path in PathMonitor() { … }` — on the
 /// whole iOS 15+ range:
 ///
 /// - **iOS 17 / macOS 14 / tvOS 17 / watchOS 10+**: delegates to `NWPathMonitor`'s
@@ -16,7 +16,7 @@ import Network
 /// A fresh `NWPathMonitor` is created per iteration and cancelled on termination,
 /// avoiding two framework footguns: a cancelled monitor can't be restarted, and a
 /// single monitor's handler feeds only one consumer (Apple DTS, forums/124486).
-public struct NetworkPathMonitor: NetworkPathMonitoring, Sendable {
+public struct PathMonitor: PathMonitoring, Sendable {
 
     private let requiredInterfaceType: NWInterface.InterfaceType?
 
@@ -68,7 +68,7 @@ public struct NetworkPathMonitor: NetworkPathMonitoring, Sendable {
                 // monitor alive while streaming, then cancels it.
                 monitor.pathUpdateHandler = { continuation.yield(transform($0)) }
                 continuation.onTermination = { _ in monitor.cancel() }
-                monitor.start(queue: DispatchQueue(label: "NetworkPathMonitor"))
+                monitor.start(queue: DispatchQueue(label: "PathMonitor"))
             }
         }
     }
@@ -86,7 +86,7 @@ public struct NetworkPathMonitor: NetworkPathMonitoring, Sendable {
 
 // MARK: - AsyncSequence
 
-extension NetworkPathMonitor: AsyncSequence {
+extension PathMonitor: AsyncSequence {
     public typealias Element = NetworkPath
 
     public func makeAsyncIterator() -> AsyncStream<NetworkPath>.Iterator {

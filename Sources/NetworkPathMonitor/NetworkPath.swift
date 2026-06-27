@@ -1,4 +1,4 @@
-// Re-export Network so callers `import NetworkObserver` and get `NWPath.Status`,
+// Re-export Network so callers `import NetworkPathMonitor` and get `NWPath.Status`,
 // `NWInterface.InterfaceType`, etc. directly — keeping the API "close to Network".
 // (`@_exported` is an underscored attribute, but it's stable and widely used by
 // packages that wrap a system framework.)
@@ -8,12 +8,12 @@
 ///
 /// Why a mirror instead of vending `NWPath` directly: **`NWPath` has no public
 /// initializer**, so it cannot be constructed in unit tests. Exposing this mirror
-/// is what lets the middleware inject a `StubNetworkPathMonitor` and script
+/// is what lets the middleware inject a `StubPathMonitor` and script
 /// connectivity. The fields deliberately reuse Network's own
 /// `NWPath.Status` and `NWInterface.InterfaceType`, so the vocabulary stays
 /// identical to the framework. When you need fields beyond this subset
 /// (`gateways`, `supportsDNS`, `unsatisfiedReason`, `isUltraConstrained`, …), reach for the raw
-/// `NWPath` stream on `NetworkPathMonitor.nwPaths()`.
+/// `NWPath` stream on `PathMonitor.nwPaths()`.
 public struct NetworkPath: Sendable, Equatable {
 
     /// Mirrors `NWPath.status` — `.satisfied`, `.unsatisfied`, `.requiresConnection`.

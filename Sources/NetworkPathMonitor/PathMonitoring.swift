@@ -2,13 +2,13 @@ import Network
 
 /// The interface a consumer (e.g. `RefreshTokenAuthMiddleware`) depends on to
 /// observe network state. Depend on this protocol — not the concrete monitor —
-/// so you can inject `StubNetworkPathMonitor` in tests.
+/// so you can inject `StubPathMonitor` in tests.
 ///
 /// The shape mirrors iterating `NWPathMonitor` directly: a stream of paths,
 /// beginning with the current one. The element is `NetworkPath` (a `Sendable`
 /// mirror) rather than `NWPath` purely so it can be constructed in stubs — see
 /// `NetworkPath` for the rationale.
-public protocol NetworkPathMonitoring: Sendable {
+public protocol PathMonitoring: Sendable {
 
     /// An async sequence of network paths. The first element is the current path;
     /// each subsequent element is a change. Buffering keeps only the newest value
@@ -18,7 +18,7 @@ public protocol NetworkPathMonitoring: Sendable {
     func paths() -> AsyncStream<NetworkPath>
 }
 
-public extension NetworkPathMonitoring {
+public extension PathMonitoring {
 
     /// The most recent path, awaiting the first update if none has arrived yet.
     /// Returns `nil` only if the stream finishes before producing a value.

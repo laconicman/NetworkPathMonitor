@@ -4,19 +4,19 @@
     @PageColor(blue)
 }
 
-Load-bearing design record for `NetworkObserver`: why the package vends a `Sendable`
+Load-bearing design record for `NetworkPathMonitor`: why the package vends a `Sendable`
 value mirror instead of `NWPath`, how it presents one `AsyncSequence` shape across the
 whole iOS 15+ range, why it buffers the newest value only, and how the protocol seam
 keeps a consumer — e.g. a refresh-token auth middleware — testable.
 
 ## Overview
 
-> Note: This is the as-designed record. ``NetworkPathMonitor``, ``NetworkPathMonitoring``,
+> Note: This is the as-designed record. ``PathMonitor``, ``PathMonitoring``,
 > and ``NetworkPath`` conform to it; deviations require a doc update. The repository's
 > [`ROADMAP.md`](https://github.com/laconicman/NetworkPathMonitor/blob/main/ROADMAP.md)
 > carries the milestone summary; this article is authoritative when the two disagree.
 
-`NetworkObserver` is deliberately small. It observes **paths** — the connectivity
+`NetworkPathMonitor` is deliberately small. It observes **paths** — the connectivity
 *state* of the device — and nothing else. Every choice below falls out of two
 constraints: the stream element must be constructible in tests (so a consumer can be
 driven through offline → online without a real network), and the iteration surface must
@@ -33,7 +33,7 @@ with a refresh-token auth middleware. §8 is the roadmap.
 
 ## 1. Architectural posture
 
-`NetworkObserver` owns **path observation as state**: a stream of ``NetworkPath`` values
+`NetworkPathMonitor` owns **path observation as state**: a stream of ``NetworkPath`` values
 beginning with the current one and updated on change. It deliberately does **not** own:
 
 - **Raw connections.** Sockets, TLS, framing — the `Network` *connection* layer (and
@@ -64,10 +64,10 @@ The mirror carries the decision-relevant subset — `status`, `isExpensive`,
 (`NWPath.Status`, `NWInterface.InterfaceType`) rather than redeclaring them, so the
 vocabulary stays identical to the framework while the type stays constructible. The
 module re-exports `Network` (`@_exported import Network`), so a caller that
-`import NetworkObserver` gets `NWPath.Status` and friends directly.
+`import NetworkPathMonitor` gets `NWPath.Status` and friends directly.
 
 When you need a field the mirror omits (`gateways`, `supportsDNS`, `unsatisfiedReason`,
-`isUltraConstrained`, …), the escape hatch is the raw stream ``NetworkPathMonitor/nwPaths()`` — the mirror is a
+`isUltraConstrained`, …), the escape hatch is the raw stream ``PathMonitor/nwPaths()`` — the mirror is a
 convenience for the common case, not a wall.
 
 > Tip: ``NetworkPath/satisfied(isExpensive:isConstrained:interfaces:)`` and
@@ -76,7 +76,7 @@ convenience for the common case, not a wall.
 ## 3. One `AsyncSequence` shape, two backends
 
 **Decision: the monitor *is* an `AsyncSequence`, iterated like `NWPathMonitor` itself —**
-`for await path in NetworkPathMonitor()`. That mirrors modern `Network`, but
+`for await path in PathMonitor()`. That mirrors modern `Network`, but
 `NWPathMonitor`'s native `AsyncSequence` conformance is **iOS 17+ only**. So the package
 presents one shape over two backends:
 
@@ -100,18 +100,18 @@ missed. `AsyncStream(bufferingPolicy: .bufferingNewest(1))` encodes exactly that
 
 ## 5. The injection seam and the test-support split
 
-Consumers depend on ``NetworkPathMonitoring`` — not the concrete ``NetworkPathMonitor`` —
+Consumers depend on ``PathMonitoring`` — not the concrete ``PathMonitor`` —
 so they can inject a stub. The protocol is intentionally one requirement,
-``NetworkPathMonitoring/paths()``; the two primitives most policies want are default
+``PathMonitoring/paths()``; the two primitives most policies want are default
 implementations on top of it:
 
-- ``NetworkPathMonitoring/currentPath()`` — the most recent path (awaits the first if
+- ``PathMonitoring/currentPath()`` — the most recent path (awaits the first if
   none has arrived).
-- ``NetworkPathMonitoring/waitUntilSatisfied()`` — suspend until a usable path exists.
+- ``PathMonitoring/waitUntilSatisfied()`` — suspend until a usable path exists.
   This is the primitive a connectivity-reactive policy uses — drive UX or pace retries (§7).
 
-The stub ships in a **separate product**, `NetworkObserverTestSupport`
-(`StubNetworkPathMonitor`), so production code never links it while a consumer's test
+The stub ships in a **separate product**, `NetworkPathMonitorTestSupport`
+(`StubPathMonitor`), so production code never links it while a consumer's test
 target can. A stub is constructed from a scripted `[NetworkPath]` and emits it in order,
 which is only possible because the element is the constructible mirror from §2.
 
@@ -121,7 +121,7 @@ Every caller must internalize this: a `.satisfied` path means *a usable path exi
 that the internet — or your endpoint — is reachable. A **captive portal** (hotel Wi-Fi)
 satisfies a path while intercepting all traffic. For true reachability, make a real
 request and handle failure; for systematic captive-portal detection, a dedicated library
-(e.g. `rwbutler/Connectivity`) is the right tool. `NetworkObserver` reports the OS path
+(e.g. `rwbutler/Connectivity`) is the right tool. `NetworkPathMonitor` reports the OS path
 verdict and stays out of the reachability-proof business by design (§1).
 
 ## 7. Integration with a refresh-token auth middleware
@@ -135,7 +135,7 @@ is the piece it needs**, not the connection layer.
 > and *then* firing the call is a race (connectivity can change in the gap) and duplicates
 > what the OS already does better. Make the **request** wait by configuring the transport's
 > `URLSession` (`waitsForConnectivity` and the `allows*NetworkAccess` family); use
-> `NetworkObserver` to **react to** connectivity — which is what path monitoring is for.
+> `NetworkPathMonitor` to **react to** connectivity — which is what path monitoring is for.
 > (Apple, [WWDC 2018 session 715](https://developer.apple.com/videos/play/wwdc2018/715/).)
 
 ```swift
@@ -146,7 +146,7 @@ config.allowsConstrainedNetworkAccess = false   // e.g. don't refresh over Low D
 // Build the OpenAPI transport's URLSession from `config`.
 ```
 
-Where `NetworkObserver` earns its place — the middleware (as of 2.0.0) has **no**
+Where `NetworkPathMonitor` earns its place — the middleware (as of 2.0.0) has **no**
 connectivity hook — is *reaction*:
 
 - **Surface the right error.** The `credentialsProvider` closure
@@ -164,13 +164,13 @@ let credentialsProvider: CredentialsProvider<Credentials> = {
 }
 ```
 
-- **Drive UX and pace retries.** Observe ``NetworkPathMonitoring/paths()`` to show a
+- **Drive UX and pace retries.** Observe ``PathMonitoring/paths()`` to show a
   "waiting for network" state, or hold a retry runner such as
   [swift-concurrency-retry](https://github.com/laconicman/swift-concurrency-retry) until
-  ``NetworkPathMonitoring/waitUntilSatisfied()`` returns before the next attempt.
+  ``PathMonitoring/waitUntilSatisfied()`` returns before the next attempt.
 
-Because the consumer depends on ``NetworkPathMonitoring``, both are testable end to end:
-inject `StubNetworkPathMonitor([.unsatisfied, .satisfied()])` and assert the consumer
+Because the consumer depends on ``PathMonitoring``, both are testable end to end:
+inject `StubPathMonitor([.unsatisfied, .satisfied()])` and assert the consumer
 reports offline, then proceeds.
 
 ## 8. Roadmap: iOS 26 structured-concurrency Network APIs
@@ -185,10 +185,10 @@ Relevance: a `URLSession`-backed consumer opens no raw connections today, so pat
 monitoring (this package) is the piece needed now, and `NWPathMonitor`'s native
 `AsyncSequence` already covers iOS 17+. Adopt the `NetworkConnection` family only if a
 consumer later moves to a raw-connection transport — and because consumers depend on
-``NetworkPathMonitoring``, that would be an additive change, not a rewrite.
+``PathMonitoring``, that would be an additive change, not a rewrite.
 
 The ``NetworkPath`` mirror survives that recraft regardless: even
 [`NetworkConnection.currentPath`](https://developer.apple.com/documentation/network/networkconnection/currentpath)
 returns `NWPath?` — still with no public initializer — so the value mirror remains the
-testability seam, and the ``NetworkPathMonitoring`` protocol insulates consumers from any
+testability seam, and the ``PathMonitoring`` protocol insulates consumers from any
 future path-representation churn.

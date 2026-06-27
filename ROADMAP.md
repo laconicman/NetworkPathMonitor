@@ -1,13 +1,13 @@
 # Roadmap
 
 Milestone summary for `NetworkPathMonitor`. The load-bearing design record lives at
-[`Sources/NetworkObserver/NetworkObserver.docc/Design.md`](Sources/NetworkObserver/NetworkObserver.docc/Design.md)
+[`Sources/NetworkPathMonitor/NetworkPathMonitor.docc/Design.md`](Sources/NetworkPathMonitor/NetworkPathMonitor.docc/Design.md)
 (a DocC article that also renders on Swift Package Index). This file is a summary; the
 design article is authoritative when the two disagree.
 
 ## Done in 1.0.0
 
-- **Protocol-first observation.** `NetworkPathMonitoring` has one requirement, `paths()`;
+- **Protocol-first observation.** `PathMonitoring` has one requirement, `paths()`;
   the two primitives policies actually want — `currentPath()` and `waitUntilSatisfied()` —
   are default implementations on top of it. Consumers depend on the protocol so they can
   inject a stub.
@@ -15,8 +15,8 @@ design article is authoritative when the two disagree.
   decision-relevant subset of `NWPath` (`status`, `isExpensive`, `isConstrained`,
   `availableInterfaces`), reusing Network's own `NWPath.Status` / `NWInterface.InterfaceType`.
   Exists because `NWPath` has no public initializer and so can't be constructed in tests.
-  Raw `NWPath` stays reachable via `NetworkPathMonitor.nwPaths()`.
-- **One `AsyncSequence` shape across iOS 15+.** `NetworkPathMonitor` is iterated like
+  Raw `NWPath` stays reachable via `PathMonitor.nwPaths()`.
+- **One `AsyncSequence` shape across iOS 15+.** `PathMonitor` is iterated like
   `NWPathMonitor` itself. iOS 17+ delegates to the native `AsyncSequence`; iOS 15–16
   hand-roll the same shape by bridging `pathUpdateHandler` into an `AsyncStream`. A fresh
   monitor is created per iteration and cancelled on termination (a cancelled monitor can't
@@ -25,7 +25,7 @@ design article is authoritative when the two disagree.
   current path, never a stale backlog.
 - **Optional `requiredInterfaceType`.** Observe a single medium (e.g. `.wifi`) when needed;
   `nil` (default) answers plain "am I online?".
-- **Separate `NetworkObserverTestSupport` product.** `StubNetworkPathMonitor` scripts an
+- **Separate `NetworkPathMonitorTestSupport` product.** `StubPathMonitor` scripts an
   offline → online sequence without a real network; production code never links it.
 - **Swift 6 language mode, strict-concurrency clean.** No `@unchecked Sendable` anywhere.
 - **Swift Testing suite + docs.** `@Suite`/`@Test`/`#expect` coverage; DocC catalog
@@ -37,7 +37,7 @@ design article is authoritative when the two disagree.
   `NetworkListener` / `NetworkBrowser` ([WWDC 2025 session 250](https://developer.apple.com/videos/play/wwdc2025/250/))
   cover the *connection* layer. A `URLSession`-backed consumer (the motivating
   `RefreshTokenAuthMiddleware`) opens no raw connections, so path monitoring suffices today.
-  Because consumers depend on `NetworkPathMonitoring`, adding connection support later is
+  Because consumers depend on `PathMonitoring`, adding connection support later is
   additive, not a rewrite. See Design §8.
 - **Captive-portal / reachability helper — deliberately deferred.** `.satisfied` ≠
   reachable (Design §6). Proving an endpoint is up stays out of scope by design; a
@@ -48,7 +48,7 @@ design article is authoritative when the two disagree.
 
 - **apple-network.** Implements the skill's prescribed Part 1 pattern almost verbatim —
   the `NetworkPath` `Sendable` mirror reusing Network's own enums, the
-  `NetworkPathMonitoring` protocol vending the mirror, `.bufferingNewest(1)`, a fresh
+  `PathMonitoring` protocol vending the mirror, `.bufferingNewest(1)`, a fresh
   monitor per stream cancelled on termination, and `availableInterfaces.first?.type` (no
   `CaseIterable` retrofit). Every "Pitfalls in depth" item is handled (strong reference,
   not-restartable, `.satisfied` ≠ reachable, `requiredInterfaceType` inversion,
@@ -68,6 +68,6 @@ design article is authoritative when the two disagree.
   parameter-free tests, and a scripted stub to drive offline → online deterministically
   (a hang would time out rather than pass).
 - **swiftui-foundation (architectural style).** Program-to-a-protocol dependency injection
-  (depend on `NetworkPathMonitoring`, inject the concrete monitor or a stub) and a
+  (depend on `PathMonitoring`, inject the concrete monitor or a stub) and a
   value-type model (`NetworkPath`) — the same testable-by-construction posture the course
   advocates, applied below the UI layer.
