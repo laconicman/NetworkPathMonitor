@@ -14,10 +14,11 @@ Consumers depend on the ``PathMonitoring`` protocol rather than the concrete
 ``PathMonitor``, so the live monitor can be swapped for a scriptable stub in
 tests. The stream element is ``NetworkPath`` — a `Sendable` value mirror of the
 decision-relevant subset of `NWPath` — because `NWPath` has no public initializer and so
-cannot be constructed in a test. The mirror reuses Network's own `NWPath.Status` and
-`NWInterface.InterfaceType`, so the vocabulary stays identical to the framework; the raw
-`NWPath` stream is still reachable via ``PathMonitor/nwPaths()`` when you need
-fields the mirror omits (`gateways`, `supportsDNS`, `unsatisfiedReason`, `isUltraConstrained`, …).
+cannot be constructed in a test. The mirror reuses Network's own `NWPath.Status`,
+`NWPath.UnsatisfiedReason`, and `NWInterface.InterfaceType`, so the vocabulary stays
+identical to the framework; the raw `NWPath` stream is still reachable via
+``PathMonitor/nwPaths()`` when you need fields the mirror omits (`gateways`,
+`supportsDNS`, `isUltraConstrained`, …).
 
 The default convenience primitives — ``PathMonitoring/currentPath()`` and
 ``PathMonitoring/waitUntilSatisfied()`` — are the two a connectivity-aware policy

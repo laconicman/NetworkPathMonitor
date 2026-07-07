@@ -27,8 +27,8 @@ match modern `Network` across a four-OS-generation deployment range.
 §1 fixes what the package owns and refuses to own. §2 is the load-bearing decision — the
 ``NetworkPath`` value mirror and why it must exist. §3 covers the single `AsyncSequence`
 shape and the iOS 15–16 bridge that backs it. §4 explains the buffering policy. §5 covers
-the injection seam and the test-support split. §6 is the one correctness caveat every
-caller must internalize (`.satisfied` ≠ reachable). §7 shows the intended integration
+the injection seam and the test-support split. §6 covers the correctness caveats every
+caller must internalize (`.satisfied` ≠ reachable, and what a VPN changes). §7 shows the intended integration
 with a refresh-token auth middleware. §8 is the roadmap.
 
 ## 1. Architectural posture
@@ -59,14 +59,15 @@ that owns their decisions.
 be stubbed — there is no way to construct a canned offline-then-online sequence in a unit
 test. That single fact is why ``NetworkPath`` exists.
 
-The mirror carries the decision-relevant subset — `status`, `isExpensive`,
-`isConstrained`, `availableInterfaces` — and **reuses Network's own enums**
-(`NWPath.Status`, `NWInterface.InterfaceType`) rather than redeclaring them, so the
+The mirror carries the decision-relevant subset — `status`, `unsatisfiedReason`,
+`isExpensive`, `isConstrained`, `availableInterfaces`, `usedInterfaceTypes` — and
+**reuses Network's own enums** (`NWPath.Status`, `NWPath.UnsatisfiedReason`,
+`NWInterface.InterfaceType`) rather than redeclaring them, so the
 vocabulary stays identical to the framework while the type stays constructible. The
 module re-exports `Network` (`@_exported import Network`), so a caller that
 `import NetworkPathMonitor` gets `NWPath.Status` and friends directly.
 
-When you need a field the mirror omits (`gateways`, `supportsDNS`, `unsatisfiedReason`,
+When you need a field the mirror omits (`gateways`, `supportsDNS`,
 `isUltraConstrained`, …), the escape hatch is the raw stream ``PathMonitor/nwPaths()`` — the mirror is a
 convenience for the common case, not a wall.
 
@@ -115,7 +116,7 @@ The stub ships in a **separate product**, `NetworkPathMonitorTestSupport`
 target can. A stub is constructed from a scripted `[NetworkPath]` and emits it in order,
 which is only possible because the element is the constructible mirror from §2.
 
-## 6. `.satisfied` is not "reachable"
+## 6. Correctness caveats: `.satisfied` ≠ "reachable", and VPNs
 
 Every caller must internalize this: a `.satisfied` path means *a usable path exists*, not
 that the internet — or your endpoint — is reachable. A **captive portal** (hotel Wi-Fi)
@@ -123,6 +124,28 @@ satisfies a path while intercepting all traffic. For true reachability, make a r
 request and handle failure; for systematic captive-portal detection, a dedicated library
 (e.g. `rwbutler/Connectivity`) is the right tool. `NetworkPathMonitor` reports the OS path
 verdict and stays out of the reachability-proof business by design (§1).
+
+### What a system VPN changes
+
+A VPN inserts a virtual tunnel interface into the path, and three things follow:
+
+- **The medium is masked.** Under a full-tunnel VPN the preferred interface is the
+  tunnel, and Network types tunnels as `.other` — so ``NetworkPath/primaryInterface``
+  reports `.other`, not `.wifi` / `.cellular`. ``NetworkPath/usesInterfaceType(_:)``
+  (captured from `NWPath.usesInterfaceType(_:)`) can still surface the underlying
+  medium, though whether the physical interface shows through depends on the VPN
+  configuration (full vs split tunnel).
+- **An idle on-demand VPN reports `.requiresConnection`.** The path exists but needs
+  a connection attempt to bring the tunnel up, so ``NetworkPath/isSatisfied`` is
+  `false` and ``PathMonitoring/waitUntilSatisfied()`` keeps waiting until something
+  triggers traffic.
+- **A required-but-inactive VPN explains itself.** The path is `.unsatisfied` with
+  ``NetworkPath/unsatisfiedReason`` `.vpnInactive` — surface that instead of a
+  generic "offline".
+
+VPN transitions (connect, disconnect, Wi-Fi ↔ cellular underneath the tunnel) all
+fire path updates, so the stream reacts correctly — a VPN obscures the *interface
+identity*, not the *connectivity verdict*.
 
 ## 7. Integration with a refresh-token auth middleware
 

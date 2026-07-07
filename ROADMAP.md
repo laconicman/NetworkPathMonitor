@@ -31,6 +31,16 @@ design article is authoritative when the two disagree.
 - **Swift Testing suite + docs.** `@Suite`/`@Test`/`#expect` coverage; DocC catalog
   (landing page + design article); `.spi.yml` enabling SPI-hosted documentation; Apache-2.0.
 
+## Done in 1.1.0
+
+- **VPN-aware mirror fields.** A full-tunnel VPN makes the tunnel the preferred
+  interface, and Network types tunnels as `.other` — so `primaryInterface` alone can't
+  answer "Wi-Fi or LTE?". The mirror now also carries `usedInterfaceTypes` (captured
+  from `NWPath.usesInterfaceType(_:)`, exposed as `usesInterfaceType(_:)`) and
+  `unsatisfiedReason` (e.g. `.vpnInactive` when a required VPN is down). The VPN
+  caveats — including idle on-demand VPNs reporting `.requiresConnection` — are
+  documented in Design §6.
+
 ## Planned
 
 - **iOS 26 `NetworkConnection` family — adopt only if needed.** `NetworkConnection` /

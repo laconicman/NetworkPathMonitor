@@ -6,7 +6,7 @@
 A tiny, dependency-free network-path observer for Apple platforms, built on `Network` (`NWPathMonitor`) with Swift Concurrency. It exists to feed connectivity-aware decisions — e.g. surfacing the *right* error when a request fails offline, driving a "waiting for network" UI, or pacing a retry policy.
 
 - **Baseline:** iOS 15+, macOS 12+, tvOS 15+, watchOS 8+, visionOS 1+ · Swift 6 language mode.
-- **API close to `Network`:** re-exports Network; reuses `NWPath.Status` and `NWInterface.InterfaceType`; the monitor is an `AsyncSequence` you iterate like `NWPathMonitor` itself.
+- **API close to `Network`:** re-exports Network; reuses `NWPath.Status`, `NWPath.UnsatisfiedReason`, and `NWInterface.InterfaceType`; the monitor is an `AsyncSequence` you iterate like `NWPathMonitor` itself.
 - **Injectable + testable:** depend on the `PathMonitoring` protocol; swap `StubPathMonitor` in tests.
 
 ## Installation
@@ -61,7 +61,9 @@ let online = await monitor.currentPath()?.isSatisfied ?? false
 await monitor.waitUntilSatisfied()   // suspend until connectivity returns
 ```
 
-Need fields the mirror omits (`gateways`, `supportsDNS`, `unsatisfiedReason`, `isUltraConstrained`)? Use `monitor.nwPaths()` for the raw `NWPath` stream.
+Need fields the mirror omits (`gateways`, `supportsDNS`, `isUltraConstrained`)? Use `monitor.nwPaths()` for the raw `NWPath` stream.
+
+**Under a system VPN** the preferred interface is the tunnel, which reports as `.other` — masking Wi-Fi/cellular. Ask `path.usesInterfaceType(.wifi)` instead of reading `path.primaryInterface`, and note an unsatisfied path can explain itself via `path.unsatisfiedReason` (e.g. `.vpnInactive`). Full caveat — including on-demand VPNs reporting `.requiresConnection` — in [`Design` §6](Sources/NetworkPathMonitor/NetworkPathMonitor.docc/Design.md).
 
 ## Design
 

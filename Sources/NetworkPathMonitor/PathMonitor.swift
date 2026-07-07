@@ -34,7 +34,7 @@ public struct PathMonitor: PathMonitoring, Sendable {
     }
 
     /// The raw `NWPath` stream, for callers needing fields the mirror omits
-    /// (`gateways`, `supportsDNS`, `unsatisfiedReason`, `isUltraConstrained`, …).
+    /// (`gateways`, `supportsDNS`, `isUltraConstrained`, …).
     public func nwPaths() -> AsyncStream<NWPath> {
         makeStream { $0 }
     }

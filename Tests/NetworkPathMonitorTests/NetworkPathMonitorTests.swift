@@ -41,4 +41,33 @@ struct NetworkPathMonitorTests {
         #expect(path.status == .satisfied)            // reuses NWPath.Status
         #expect(path.primaryInterface == .cellular)   // reuses NWInterface.InterfaceType
     }
+
+    @Test("VPN-shaped path: primaryInterface masks as .other, usesInterfaceType sees the medium")
+    func vpnShapedPath() {
+        // Full-tunnel VPN: the preferred interface is the tunnel (typed .other),
+        // while the physical medium may still carry the traffic underneath.
+        let path = NetworkPath(
+            status: .satisfied,
+            availableInterfaces: [.other, .cellular],
+            usedInterfaceTypes: [.other, .cellular]
+        )
+        #expect(path.primaryInterface == .other)
+        #expect(path.usesInterfaceType(.cellular))
+        #expect(!path.usesInterfaceType(.wifi))
+    }
+
+    @Test("usedInterfaceTypes defaults to the available interfaces")
+    func usedInterfaceTypesDefault() {
+        let path = NetworkPath.satisfied(interfaces: [.wifi])
+        #expect(path.usedInterfaceTypes == [.wifi])
+        #expect(path.usesInterfaceType(.wifi))
+    }
+
+    @Test("unsatisfiedReason mirrors NWPath.UnsatisfiedReason")
+    func unsatisfiedReasonMirrors() {
+        #expect(NetworkPath.unsatisfied.unsatisfiedReason == .notAvailable)
+        let vpnDown = NetworkPath(status: .unsatisfied, unsatisfiedReason: .vpnInactive)
+        #expect(vpnDown.isSatisfied == false)
+        #expect(vpnDown.unsatisfiedReason == .vpnInactive)
+    }
 }
