@@ -2,6 +2,7 @@
 
 [![Swift Compatibility](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Flaconicman%2FNetworkPathMonitor%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/laconicman/NetworkPathMonitor)
 [![Platform Compatibility](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Flaconicman%2FNetworkPathMonitor%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/laconicman/NetworkPathMonitor)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/laconicman/NetworkPathMonitor)
 
 A tiny, dependency-free network-path observer for Apple platforms, built on `Network` (`NWPathMonitor`) with Swift Concurrency. It exists to feed connectivity-aware decisions — e.g. surfacing the *right* error when a request fails offline, driving a "waiting for network" UI, or pacing a retry policy.
 
